@@ -5,6 +5,12 @@ var minorScale = [0,2,3,5,7,8,10,12,0,2,3,5];
 var ctx = new (window.AudioContext || window.webkitAudioContext)();
 var VOICE_MAP = ['bass', 'melody1', 'melody2', 'kick', 'snare', 'hihat'];
 
+var OUTPUT = ctx.createGain();
+var filter = ctx.createBiquadFilter();
+OUTPUT.connect(filter);
+filter.connect(ctx.destination);
+filter.type = 0;
+
 var scheduler = new Scheduler(ctx);
 scheduler.setTempo(120);
 var pattern = scheduler.createPattern('1');
@@ -24,10 +30,10 @@ pattern.set(voices['hihat'], 'x-x-x-xxx-x-x-x-');
 pattern.set(voices['bass'], 'E2_______________');
 scheduler.play('1');
 
-voices['kick'].connect(ctx.destination);
-voices['snare'].connect(ctx.destination);
-voices['hihat'].connect(ctx.destination);
-voices['bass'].connect(ctx.destination);
+voices['kick'].connect(OUTPUT);
+voices['snare'].connect(OUTPUT);
+voices['hihat'].connect(OUTPUT);
+voices['bass'].connect(OUTPUT);
 
 createDelay(voices['melody1']);
 createDelay(voices['melody2']);
@@ -50,6 +56,10 @@ scheduler.on('data', function (data) {
   Object.keys(PROC_ARPS).forEach(function (key) {
     PROC_ARPS[key] = [];
   });
+  ['kick', 'snare', 'hihat', 'bass'].forEach(function (inst) {
+    pattern.set(voices[inst], '----------------');
+  });
+  filter.frequency.value = 22100;
   data.forEach(function (row, rowNum) {
     row.split('').forEach(function (el, i) {
       if (+el) {
@@ -58,6 +68,8 @@ scheduler.on('data', function (data) {
           pattern.set(voices[voice], patterns[voice][rowNum]);
         } else if (~[1,2].indexOf(i)) {
           PROC_ARPS[voice] = patterns[voice][rowNum];
+        } else if (i === 7) {
+          filter.frequency.value = (100 * rowNum) + 55;
         }
       }
     });
@@ -67,7 +79,7 @@ scheduler.on('data', function (data) {
 function makeScale (notes, sustain) {
   var beats = 8;
   var string = '';
-  if (!notes.length)
+  if (!notes || !notes.length)
     return '----------------';
   while (beats) {
     var note = getNote();
@@ -103,14 +115,14 @@ function createDelay (node) {
   delay1.delayTime.value = 60 / scheduler.tempo / 2
   delay2.delayTime.value = 60 / scheduler.tempo / 4
   console.log(60 / scheduler.tempo / 1);
-  gain1.gain.value = 0.05;
-  gain2.gain.value = 0.05;
+  gain1.gain.value = 0.7;
+  gain2.gain.value = 0.5;
 
   delay1.connect(gain1);
   delay2.connect(gain2);
 
   gain1.connect(merger, 0, 0);
   gain2.connect(merger, 0, 1);
-  node.connect(ctx.destination);
-  merger.connect(ctx.destination);
+  node.connect(OUTPUT);
+  merger.connect(OUTPUT);
 }

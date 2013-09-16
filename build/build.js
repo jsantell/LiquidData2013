@@ -537,7 +537,7 @@ function Voice (scheduler, type) {
   this.gain = this.scheduler.ctx.createGain();
   this.type = OSCILLATORS[type] != undefined ? 'osc' : 'buffer';
   if (this.type === 'osc') {
-    this.gain.gain.value = 0.3;
+    this.gain.gain.value = 0.05;
     this.node = this.scheduler.ctx.createOscillator();
     console.log('setting', OSCILLATORS[type]);
     this.node.type = OSCILLATORS[type];
