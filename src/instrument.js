@@ -8,13 +8,15 @@ var OSCILLATORS = {
 function Voice (scheduler, type) {
   this.scheduler = scheduler;
   this.gain = this.scheduler.ctx.createGain();
-  this.gain.gain.value = 0.7;
-  this.type = OSCILLATORS[type] ? 'osc' : 'buffer';
+  this.type = OSCILLATORS[type] != undefined ? 'osc' : 'buffer';
   if (this.type === 'osc') {
+    this.gain.gain.value = 0.3;
     this.node = this.scheduler.ctx.createOscillator();
-    this.node.type = OSCILLATORS[(type || '').toLowerCase()];
+    console.log('setting', OSCILLATORS[type]);
+    this.node.type = OSCILLATORS[type];
     this.node.connect(this.gain);
   } else {
+    this.gain.gain.value = 1;
     this.node = this.scheduler.ctx.createBufferSource();
     this.reloadBuffer();
     this.url = type;
@@ -29,7 +31,7 @@ Voice.prototype = {
   setURL: function (url) {
     this.url = url;
   },
-  reloadBuffer: function () {
+  reloadBuffer: function (cb) {
     var scheduler = this.scheduler;
     var voice = this;
     var gain = this.gain;
@@ -39,6 +41,7 @@ Voice.prototype = {
         voice.node = scheduler.ctx.createBufferSource();
         voice.node.buffer = buffer;
         voice.node.connect(gain);
+        cb(voice.node);
       });
     });
   },
@@ -47,15 +50,16 @@ Voice.prototype = {
     var voice = this;
     if (this.type === 'osc') {
       this.node.frequency.setValueAtTime(freq, time, 1);
-      this.gain.gain.setValueAtTime(1, time);
+      this.gain.gain.setValueAtTime(this.volume || 0.05, time);
       this.gain.gain.setValueAtTime(0, duration - 0.004);
+      this.node.start(time);
     }
-    console.log('start at ', time, 'reloading at', time + 0.1 - voice.scheduler.ctx.currentTime);
-    this.node.start(time);
     if (this.type === 'buffer') {
       setTimeout(function () {
-        voice.reloadBuffer();
-      }, (time + 0.1 - voice.scheduler.ctx.currentTime) * 1000);
+        voice.reloadBuffer(function (node) {
+          node.start(time);
+        });
+      }, (time - 0.05 - voice.scheduler.ctx.currentTime) * 1000);
     }
   },
   connect: function (node) {

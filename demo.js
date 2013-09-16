@@ -1,48 +1,91 @@
 var Scheduler = require('./src/index.js');
+var patterns = Scheduler.patterns;
 var notes = ['C','C#','D','D#','E','F','F#','G','G#', 'A','A#','B'];
 var minorScale = [0,2,3,5,7,8,10,12,0,2,3,5];
 var ctx = new (window.AudioContext || window.webkitAudioContext)();
+var VOICE_MAP = ['bass', 'melody1', 'melody2', 'kick', 'snare', 'hihat'];
+
 var scheduler = new Scheduler(ctx);
 scheduler.setTempo(120);
 var pattern = scheduler.createPattern('1');
 
 var voices = {
   'kick': scheduler.createVoice('samples/kick/b_1.wav'),
-  'melody1': scheduler.createVoice('square')
+  'snare': scheduler.createVoice('samples/snare/s_2.wav'),
+  'hihat': scheduler.createVoice('samples/hihat/h_2.wav'),
+  'bass': scheduler.createVoice('triangle'),
+  'melody1': scheduler.createVoice('sine'),
+  'melody2': scheduler.createVoice('square')
 };
 
-pattern.set(voices['kick'], 'x---x---x---x---');
-/*
-pattern.set(voices['melody1'],
-  'F#4_F#4_C#5_F#4_' +
-  'D5_F#4_C#5_F#4_' +
-  'C#5_B4_A4_B4_' +
-  'B4_A4_G#4_E4_');
-*/
+pattern.set(voices['kick'],  'x---x---x---x---');
+pattern.set(voices['snare'], '----x-------x---');
+pattern.set(voices['hihat'], 'x-x-x-xxx-x-x-x-');
+pattern.set(voices['bass'], 'E2_______________');
 scheduler.play('1');
 
 voices['kick'].connect(ctx.destination);
+voices['snare'].connect(ctx.destination);
+voices['hihat'].connect(ctx.destination);
+voices['bass'].connect(ctx.destination);
 
 createDelay(voices['melody1']);
+createDelay(voices['melody2']);
+
+
+voices['bass'].volume = 0.4;
+
+var PROC_ARPS = {
+  'melody1': ['E','G','B'],
+  'melody2': ['G','B','D']
+};
+
+setInterval(function () {
+  pattern.set(voices['melody1'], makeScale(PROC_ARPS.melody1,true));
+  pattern.set(voices['melody2'], makeScale(PROC_ARPS.melody2));
+}, 1.75);
 
 scheduler.on('data', function (data) {
-  var on = data.substr(0,8);
-  var type = on.split('').indexOf("1") + 1;
-  voices['melody1'].node.type = type;
+  data = data.split(',');
+  Object.keys(PROC_ARPS).forEach(function (key) {
+    PROC_ARPS[key] = [];
+  });
+  data.forEach(function (row, rowNum) {
+    row.split('').forEach(function (el, i) {
+      if (+el) {
+        var voice = VOICE_MAP[i];
+        if (~[0, 3, 4, 5].indexOf(i)) {
+          pattern.set(voices[voice], patterns[voice][rowNum]);
+        } else if (~[1,2].indexOf(i)) {
+          PROC_ARPS[voice] = patterns[voice][rowNum];
+        }
+      }
+    });
+  });
 });
 
-function makeScale (scale, root, start) {
-  var noteString = '';
-  var rootIndex = notes.indexOf(root);
-  scale.forEach(function (scale) {
-    noteString += notes[(rootIndex + scale)%12];
-    if ((rootIndex + scale) > 11)
-      noteString += 6;
-    else
-      noteString += 5;
-    noteString += '_';
-  });
-  return noteString;
+function makeScale (notes, sustain) {
+  var beats = 8;
+  var string = '';
+  if (!notes.length)
+    return '----------------';
+  while (beats) {
+    var note = getNote();
+    var duration = ~~(Math.random() * 4) + 1;
+    string += note + (sustain ? '_' : '-');
+    beats--;
+    for (var i = 0; i < duration && beats; i++) {
+      string += sustain ? '__' : '--';
+      beats--;
+    }
+  }
+  return string;
+
+  function getNote () {
+    var note = notes[~~(Math.random() * 3)];
+    var octave = [4,5,6][~~(Math.random()*3)];
+    return note + octave;
+  }
 }
 
 function createDelay (node) {
@@ -57,10 +100,11 @@ function createDelay (node) {
   node.connect(splitter);
   splitter.connect(delay1, 0);
   splitter.connect(delay2, 1);
-  delay1.delayTime.value = 60 / scheduler.tempo / 8
-  delay2.delayTime.value = 60 / scheduler.tempo / 16
-  gain1.gain.value = 0.5;
-  gain2.gain.value = 0.3;
+  delay1.delayTime.value = 60 / scheduler.tempo / 2
+  delay2.delayTime.value = 60 / scheduler.tempo / 4
+  console.log(60 / scheduler.tempo / 1);
+  gain1.gain.value = 0.05;
+  gain2.gain.value = 0.05;
 
   delay1.connect(gain1);
   delay2.connect(gain2);

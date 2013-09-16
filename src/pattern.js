@@ -33,6 +33,7 @@ Pattern.prototype = {
           if (noteToFreq(nextNoteType) || nextNoteType === 'x') {
             voice.play(nextNoteStart, nextNoteEnd, noteToFreq(nextNoteType));
             nextNoteType = nextNoteStart = nextNoteEnd = '';
+            time += unit;
           }
           if (!nextNoteType) {
             nextNoteStart = time;
@@ -48,6 +49,7 @@ Pattern.prototype = {
             if (nextNoteType) {
               voice.play(nextNoteStart, nextNoteEnd, noteToFreq(nextNoteType));
               nextNoteType = nextNoteStart = nextNoteEnd = '';
+              time += unit;
             }
           }
           time += unit;

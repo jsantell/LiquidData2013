@@ -1,4 +1,44 @@
 require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+module.exports = {
+  'kick': [
+    'x---x---x---x---',
+    'x-----x-x-x-x---',
+    'x-x-x-x-x-x-x-x-',
+    'xxxx----xxxx----'
+  ],
+  'snare': [
+    '----x-------x---',
+    '----x-------x-x-',
+    '----x-------x-x-',
+    '----x-------x-x-'
+  ],
+  'hihat': [
+    'x-x-x-x-x-x-x-x-',
+    'x-x-xxxxx-x-x-x-',
+    'x-x-xxxxx-x-x-x-',
+    'xxxxxxxxxxxxxxxx'
+  ],
+  'bass': [
+    'E2_______________',
+    'D2_______________',
+    'C2_______________',
+    'G2_______________'
+  ],
+  'melody1': [
+    ['E', 'G', 'B'],
+    ['G', 'B', 'D'],
+    ['B', 'D', 'F#'],
+    ['A', 'C', 'E']
+  ],
+  'melody2': [
+    ['E', 'G', 'B'],
+    ['G', 'B', 'D'],
+    ['B', 'D', 'F#'],
+    ['A', 'C', 'E']
+  ]
+};
+
+},{}],2:[function(require,module,exports){
 /**
  * Equal Temperament tuning
  * Source:
@@ -162,7 +202,7 @@ exports.noteToFreq = function (note) {
   return frequencies[note];
 };
 
-},{}],2:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 var process=require("__browserify_process");if (!process.EventEmitter) process.EventEmitter = function () {};
 
 var EventEmitter = exports.EventEmitter = process.EventEmitter;
@@ -358,7 +398,7 @@ EventEmitter.listenerCount = function(emitter, type) {
   return ret;
 };
 
-},{"__browserify_process":3}],3:[function(require,module,exports){
+},{"__browserify_process":4}],4:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -412,11 +452,11 @@ process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
 
-},{}],"qQcdah":[function(require,module,exports){
+},{}],"Hbqi/k":[function(require,module,exports){
 var Pattern = require('./pattern');
 var Instrument = require('./instrument');
 var EventEmitter = require('events').EventEmitter;
-//var socket = require('./ws')('ws://192.168.50.39:8888/events');
+var socket = require('./ws')('ws://192.168.50.39:8888/events');
 
 // Wish we could use weakmaps
 var schedulers = [];
@@ -434,6 +474,7 @@ function Scheduler (ctx) {
   schedulers.push(this);
 }
 
+Scheduler.patterns = require('../data/patterns');
 
 Scheduler.prototype = Object.create(EventEmitter.prototype);
 
@@ -467,6 +508,7 @@ Scheduler.prototype.play = function (pattern) {
   var _this = this;
 
   function play () {
+    console.log('play');
     if (pattern instanceof Pattern)
       pattern.play();
     else
@@ -475,15 +517,14 @@ Scheduler.prototype.play = function (pattern) {
 };
 
 module.exports = Scheduler;
-/*
+
 socket.onmessage = function (e) {
   schedulers.forEach(function (sch) {
     sch.emit('data', e.data);
   });
 };
-*/
 
-},{"./instrument":5,"./pattern":6,"events":2}],5:[function(require,module,exports){
+},{"../data/patterns":1,"./instrument":6,"./pattern":7,"./ws":8,"events":3}],6:[function(require,module,exports){
 var OSCILLATORS = {
   'sine': 0,
   'square': 1,
@@ -494,13 +535,15 @@ var OSCILLATORS = {
 function Voice (scheduler, type) {
   this.scheduler = scheduler;
   this.gain = this.scheduler.ctx.createGain();
-  this.gain.gain.value = 0.7;
-  this.type = OSCILLATORS[type] ? 'osc' : 'buffer';
+  this.type = OSCILLATORS[type] != undefined ? 'osc' : 'buffer';
   if (this.type === 'osc') {
+    this.gain.gain.value = 0.3;
     this.node = this.scheduler.ctx.createOscillator();
-    this.node.type = OSCILLATORS[(type || '').toLowerCase()];
+    console.log('setting', OSCILLATORS[type]);
+    this.node.type = OSCILLATORS[type];
     this.node.connect(this.gain);
   } else {
+    this.gain.gain.value = 1;
     this.node = this.scheduler.ctx.createBufferSource();
     this.reloadBuffer();
     this.url = type;
@@ -515,7 +558,7 @@ Voice.prototype = {
   setURL: function (url) {
     this.url = url;
   },
-  reloadBuffer: function () {
+  reloadBuffer: function (cb) {
     var scheduler = this.scheduler;
     var voice = this;
     var gain = this.gain;
@@ -525,6 +568,7 @@ Voice.prototype = {
         voice.node = scheduler.ctx.createBufferSource();
         voice.node.buffer = buffer;
         voice.node.connect(gain);
+        cb(voice.node);
       });
     });
   },
@@ -533,15 +577,16 @@ Voice.prototype = {
     var voice = this;
     if (this.type === 'osc') {
       this.node.frequency.setValueAtTime(freq, time, 1);
-      this.gain.gain.setValueAtTime(1, time);
+      this.gain.gain.setValueAtTime(this.volume || 0.05, time);
       this.gain.gain.setValueAtTime(0, duration - 0.004);
+      this.node.start(time);
     }
-    console.log('start at ', time, 'reloading at', time + 0.1 - voice.scheduler.ctx.currentTime);
-    this.node.start(time);
     if (this.type === 'buffer') {
       setTimeout(function () {
-        voice.reloadBuffer();
-      }, (time + 0.1 - voice.scheduler.ctx.currentTime) * 1000);
+        voice.reloadBuffer(function (node) {
+          node.start(time);
+        });
+      }, (time - 0.05 - voice.scheduler.ctx.currentTime) * 1000);
     }
   },
   connect: function (node) {
@@ -559,7 +604,7 @@ function getBuffer (url, callback) {
   xhr.send();
 }
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 var noteToFreq = require('../lib/freq').noteToFreq;
 
 function Pattern (scheduler, name) {
@@ -595,6 +640,7 @@ Pattern.prototype = {
           if (noteToFreq(nextNoteType) || nextNoteType === 'x') {
             voice.play(nextNoteStart, nextNoteEnd, noteToFreq(nextNoteType));
             nextNoteType = nextNoteStart = nextNoteEnd = '';
+            time += unit;
           }
           if (!nextNoteType) {
             nextNoteStart = time;
@@ -610,6 +656,7 @@ Pattern.prototype = {
             if (nextNoteType) {
               voice.play(nextNoteStart, nextNoteEnd, noteToFreq(nextNoteType));
               nextNoteType = nextNoteStart = nextNoteEnd = '';
+              time += unit;
             }
           }
           time += unit;
@@ -632,7 +679,26 @@ function isNote (string) {
   return !~[' ', '_', '-'].indexOf(string[0]);
 }
 
-},{"../lib/freq":1}],"./src/index.js":[function(require,module,exports){
-module.exports=require('qQcdah');
+},{"../lib/freq":2}],8:[function(require,module,exports){
+function connect(address) {
+  var ws = new WebSocket(address);
+  ws.onopen = function() {
+    console.log('Connected');
+    ws.send("Hello, world");
+  };
+  ws.onclose = function() {
+    console.log('Socket closed');
+    window.setTimeout(function() {
+      console.log('Reconnecting');
+      connect();
+    }, 1000);
+  };
+  return ws;
+}
+
+module.exports = connect;
+
+},{}],"./src/index.js":[function(require,module,exports){
+module.exports=require('Hbqi/k');
 },{}]},{},[])
 ;

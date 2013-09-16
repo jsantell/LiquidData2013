@@ -1,7 +1,7 @@
 var Pattern = require('./pattern');
 var Instrument = require('./instrument');
 var EventEmitter = require('events').EventEmitter;
-//var socket = require('./ws')('ws://192.168.50.39:8888/events');
+var socket = require('./ws')('ws://192.168.50.39:8888/events');
 
 // Wish we could use weakmaps
 var schedulers = [];
@@ -19,6 +19,7 @@ function Scheduler (ctx) {
   schedulers.push(this);
 }
 
+Scheduler.patterns = require('../data/patterns');
 
 Scheduler.prototype = Object.create(EventEmitter.prototype);
 
@@ -52,6 +53,7 @@ Scheduler.prototype.play = function (pattern) {
   var _this = this;
 
   function play () {
+    console.log('play');
     if (pattern instanceof Pattern)
       pattern.play();
     else
@@ -60,10 +62,9 @@ Scheduler.prototype.play = function (pattern) {
 };
 
 module.exports = Scheduler;
-/*
+
 socket.onmessage = function (e) {
   schedulers.forEach(function (sch) {
     sch.emit('data', e.data);
   });
 };
-*/
