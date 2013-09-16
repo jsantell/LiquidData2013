@@ -11,6 +11,10 @@ OUTPUT.connect(filter);
 filter.connect(ctx.destination);
 filter.type = 0;
 
+var drone = Scheduler.drone(ctx, 60, 50);
+drone.gain.value = 9;
+drone.connect(OUTPUT);
+
 var scheduler = new Scheduler(ctx);
 scheduler.setTempo(120);
 var pattern = scheduler.createPattern('1');
@@ -21,7 +25,9 @@ var voices = {
   'hihat': scheduler.createVoice('samples/hihat/h_2.wav'),
   'bass': scheduler.createVoice('triangle'),
   'melody1': scheduler.createVoice('sine'),
-  'melody2': scheduler.createVoice('square')
+  'melody2': scheduler.createVoice('square'),
+  'lead': scheduler.createVoice('square'),
+  'samples': scheduler.createVoice('samples/bar_samples/Samples 1.wav')
 };
 
 pattern.set(voices['kick'],  'x---x---x---x---');
@@ -34,7 +40,10 @@ voices['kick'].connect(OUTPUT);
 voices['snare'].connect(OUTPUT);
 voices['hihat'].connect(OUTPUT);
 voices['bass'].connect(OUTPUT);
-
+voices['samples'].connect(OUTPUT);
+voices['lead'].connect(OUTPUT);
+voices['lead'].node.start(0);
+voices['lead'].gain.gain.value = 0;
 createDelay(voices['melody1']);
 createDelay(voices['melody2']);
 
@@ -49,7 +58,14 @@ var PROC_ARPS = {
 setInterval(function () {
   pattern.set(voices['melody1'], makeScale(PROC_ARPS.melody1,true));
   pattern.set(voices['melody2'], makeScale(PROC_ARPS.melody2));
-}, 1.75);
+
+  if (!~~(Math.random() * 3)) {
+    var num = ~~(Math.random() * 10) + 1;
+    voices['samples'].setURL('samples/bar_samples/Sample ' + num + '.wav');
+    voices['samples'].play(scheduler.ctx.currentTime, scheduler.ctx.currentTime);
+    voices['samples'].gain.gain.value = 0.2;
+  }
+}, 1750);
 
 scheduler.on('data', function (data) {
   data = data.split(',');
@@ -59,21 +75,43 @@ scheduler.on('data', function (data) {
   ['kick', 'snare', 'hihat', 'bass'].forEach(function (inst) {
     pattern.set(voices[inst], '----------------');
   });
-  filter.frequency.value = 22100;
+  var leadSet = false;
+  var filterSet = false;
   data.forEach(function (row, rowNum) {
     row.split('').forEach(function (el, i) {
       if (+el) {
+        if (rowNum === 4) {
+          var note = ['E5','F#5','G5','A5','B5','C6','D6','E6'][i];
+          voices.lead.gain.gain.setValueAtTime(0.05, scheduler.ctx.currentTime);
+          var current = voices.lead.node.frequency.value;
+          voices.lead.node.frequency.setValueAtTime(current, scheduler.ctx.currentTime);
+          voices.lead.node.frequency.linearRampToValueAtTime(Scheduler.noteToFreq(note), scheduler.ctx.currentTime + 0.15);
+          console.log("RAMP");
+          leadSet = true;
+          return;
+        }
+
         var voice = VOICE_MAP[i];
         if (~[0, 3, 4, 5].indexOf(i)) {
           pattern.set(voices[voice], patterns[voice][rowNum]);
         } else if (~[1,2].indexOf(i)) {
           PROC_ARPS[voice] = patterns[voice][rowNum];
-        } else if (i === 7) {
-          filter.frequency.value = (100 * rowNum) + 55;
+        } else if (i === 6) {
+          filter.frequency.linearRampToValueAtTime((200 * rowNum) + 400, scheduler.ctx.currentTime);
+          filterSet = true;
         }
       }
     });
   });
+
+  if (!filterSet) {
+    filter.frequency.setValueAtTime(22100, scheduler.ctx.currentTime);
+  }
+
+  if (!leadSet) {
+    voices.lead.gain.gain.setValueAtTime(0.05, scheduler.ctx.currentTime);
+    voices.lead.gain.gain.linearRampToValueAtTime(0, scheduler.ctx.currentTime + 0.2);
+  }
 });
 
 function makeScale (notes, sustain) {
@@ -114,7 +152,6 @@ function createDelay (node) {
   splitter.connect(delay2, 1);
   delay1.delayTime.value = 60 / scheduler.tempo / 2
   delay2.delayTime.value = 60 / scheduler.tempo / 4
-  console.log(60 / scheduler.tempo / 1);
   gain1.gain.value = 0.7;
   gain2.gain.value = 0.5;
 

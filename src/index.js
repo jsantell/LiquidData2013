@@ -20,6 +20,8 @@ function Scheduler (ctx) {
 }
 
 Scheduler.patterns = require('../data/patterns');
+Scheduler.drone = require('../lib/drone');
+Scheduler.noteToFreq = require('../lib/freq').noteToFreq;
 
 Scheduler.prototype = Object.create(EventEmitter.prototype);
 

@@ -39,6 +39,81 @@ module.exports = {
 };
 
 },{}],2:[function(require,module,exports){
+var scale = [0.0, 2.0, 4.0, 6.0, 7.0, 9.0, 11.0, 12.0, 14.0];
+
+module.exports = function (context, baseNote, oscCount) {
+  var gain = context.createGainNode();
+
+  gain.gain.value = 5;
+
+  var noiseNodes = [];
+  var bufferLen = 4096;
+
+  function createNoiseGen(freq) {
+    var panner = context.createPanner();
+    var max = 20;
+    var min = -20;
+    var x = rand(min, max);
+    var y = rand(min, max);
+    var z = rand(min, max);
+    panner.setPosition(x, y, z);
+    panner.connect(gain);
+
+    var filter = context.createBiquadFilter();
+    filter.type = filter.BANDPASS;
+    filter.frequency.value = freq;
+    filter.Q.value = 150;
+    filter.connect(panner);
+
+    var noiseSource = context.createJavaScriptNode(bufferLen, 1, 2);
+    noiseSource.onaudioprocess = function (e) {
+      var outBufferL = e.outputBuffer.getChannelData(0);
+      var outBufferR = e.outputBuffer.getChannelData(1);
+      for (var i = 0; i < bufferLen; i++) {
+        outBufferL[i] = outBufferR[i] = Math.random() * 2 - 1;
+      }
+    };
+    noiseSource.connect(filter);
+    noiseNodes.push(noiseSource);
+
+    setInterval(function () {
+      x = x + rand(-0.1, 0.1);
+      y = y + rand(-0.1, 0.1);
+      z = z + rand(-0.1, 0.1);
+      panner.setPosition(x, y, z);
+    }, 500);
+  }
+
+  generate();
+
+  function generate(){
+    var base_note = baseNote;
+    var num_osc = oscCount;
+    for (var i = 0; i < num_osc; i++) {
+      var degree = Math.floor(Math.random() * scale.length);
+      var freq = mtof(base_note + scale[degree]);
+      freq += Math.random() * 4 - 2;
+      createNoiseGen(freq);
+    }
+  }
+  function reset(){
+    while (noiseNodes.length){
+      noiseNodes.pop().disconnect();
+    }
+    generate();
+  }
+  return gain;
+};
+
+function mtof(m) {
+  return Math.pow(2, (m - 69) / 12) * 440;
+}
+
+function rand(min, max) {
+  return Math.random() * (max - min) + min;
+}
+
+},{}],3:[function(require,module,exports){
 /**
  * Equal Temperament tuning
  * Source:
@@ -202,7 +277,7 @@ exports.noteToFreq = function (note) {
   return frequencies[note];
 };
 
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 var process=require("__browserify_process");if (!process.EventEmitter) process.EventEmitter = function () {};
 
 var EventEmitter = exports.EventEmitter = process.EventEmitter;
@@ -398,7 +473,7 @@ EventEmitter.listenerCount = function(emitter, type) {
   return ret;
 };
 
-},{"__browserify_process":4}],4:[function(require,module,exports){
+},{"__browserify_process":5}],5:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -475,6 +550,8 @@ function Scheduler (ctx) {
 }
 
 Scheduler.patterns = require('../data/patterns');
+Scheduler.drone = require('../lib/drone');
+Scheduler.noteToFreq = require('../lib/freq').noteToFreq;
 
 Scheduler.prototype = Object.create(EventEmitter.prototype);
 
@@ -524,7 +601,7 @@ socket.onmessage = function (e) {
   });
 };
 
-},{"../data/patterns":1,"./instrument":6,"./pattern":7,"./ws":8,"events":3}],6:[function(require,module,exports){
+},{"../data/patterns":1,"../lib/drone":2,"../lib/freq":3,"./instrument":7,"./pattern":8,"./ws":9,"events":4}],7:[function(require,module,exports){
 var OSCILLATORS = {
   'sine': 0,
   'square': 1,
@@ -539,7 +616,6 @@ function Voice (scheduler, type) {
   if (this.type === 'osc') {
     this.gain.gain.value = 0.05;
     this.node = this.scheduler.ctx.createOscillator();
-    console.log('setting', OSCILLATORS[type]);
     this.node.type = OSCILLATORS[type];
     this.node.connect(this.gain);
   } else {
@@ -604,7 +680,7 @@ function getBuffer (url, callback) {
   xhr.send();
 }
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 var noteToFreq = require('../lib/freq').noteToFreq;
 
 function Pattern (scheduler, name) {
@@ -679,7 +755,7 @@ function isNote (string) {
   return !~[' ', '_', '-'].indexOf(string[0]);
 }
 
-},{"../lib/freq":2}],8:[function(require,module,exports){
+},{"../lib/freq":3}],9:[function(require,module,exports){
 function connect(address) {
   var ws = new WebSocket(address);
   ws.onopen = function() {
